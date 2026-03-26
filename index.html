@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SILK</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #00040a; cursor: none; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        canvas { display: block; filter: contrast(1.3) saturate(1.4); position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        .ui-element {
+            position: absolute;
+            color: #ffffff;
+            letter-spacing: 6px;
+            pointer-events: none;
+            text-transform: uppercase;
+            z-index: 10; /* Ensures text is ALWAYS on top of the silk */
+            text-shadow: 0 0 20px rgba(0, 180, 255, 0.8);
+        }
+
+        #title {
+            top: 40px;
+            left: 50px;
+            font-size: 28px;
+            font-weight: 200;
+            opacity: 0.8;
+        }
+
+        #brand {
+            bottom: 40px;
+            right: 50px;
+            font-size: 8px;
+            font-weight: 800; /* Bold for ALLIED */
+            background: rgba(0, 0, 0, 0.3); /* Small dark backing for readability */
+            padding: 10px 20px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="title" class="ui-element">SILK</div>
+    <div id="brand" class="ui-element">ALLIED</div>
+    <canvas id="silkCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('silkCanvas');
+        const ctx = canvas.getContext('2d');
+        const titleEl = document.getElementById('title');
+        const brandEl = document.getElementById('brand');
+
+        let width, height, strands = [];
+        let mouse = { x: 0, y: 0, down: false };
+        let time = 0;
+
+        const strandCount = 180; 
+        const nodesPerStrand = 80;
+
+        function init() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            strands = [];
+            for (let i = 0; i < strandCount; i++) strands.push(new NebulaStrand(i));
+        }
+
+        class NebulaStrand {
+            constructor(index) {
+                this.nodes = [];
+                this.baseY = (height / strandCount) * index;
+                this.hue = 190 + (index / strandCount) * 90; 
+                for (let i = 0; i < nodesPerStrand; i++) {
+                    this.nodes.push({ x: (width / (nodesPerStrand - 1)) * i, y: this.baseY, vx: 0, vy: 0 });
+                }
+            }
+
+            update() {
+                this.nodes.forEach((node, i) => {
+                    const homeX = (width / (nodesPerStrand - 1)) * i;
+                    const homeY = this.baseY;
+
+                    const dx = mouse.x - node.x;
+                    const dy = mouse.y - node.y;
+                    const distSq = dx * dx + dy * dy;
+                    const dist = Math.sqrt(distSq);
+
+                    if (mouse.down) {
+                        const pull = Math.min(4, 1500 / (dist + 30));
+                        node.vx += dx * pull * 0.03 + (dy * 0.12);
+                        node.vy += dy * pull * 0.03 - (dx * 0.12);
+                    } else if (dist < 150) {
+                        const push = (150 - dist) / 150;
+                        node.vx -= dx * push * 0.5;
+                        node.vy -= dy * push * 0.5;
+                    }
+
+                    node.vy += Math.sin(time * 0.001 + node.x * 0.005) * 0.2;
+                    const spring = mouse.down ? 0.002 : 0.04;
+                    node.vx += (homeX - node.x) * spring;
+                    node.vy += (homeY - node.y) * spring;
+
+                    node.vx *= 0.92; node.vy *= 0.92;
+                    node.x += node.vx; node.y += node.vy;
+                });
+            }
+
+            draw(pulse) {
+                const speed = Math.abs(this.nodes[nodesPerStrand/2].vx) + Math.abs(this.nodes[nodesPerStrand/2].vy);
+                const lightness = mouse.down ? 50 + speed * 10 : 35 + speed * 4;
+                
+                ctx.beginPath();
+                ctx.moveTo(this.nodes[0].x, this.nodes[0].y);
+                for (let i = 1; i < this.nodes.length - 2; i++) {
+                    const xc = (this.nodes[i].x + this.nodes[i + 1].x) / 2;
+                    const yc = (this.nodes[i].y + this.nodes[i + 1].y) / 2;
+                    ctx.quadraticCurveTo(this.nodes[i].x, this.nodes[i].y, xc, yc);
+                }
+
+                ctx.lineWidth = 0.6;
+                ctx.strokeStyle = `hsla(${this.hue}, 100%, ${lightness}%, ${0.12 + pulse * 0.08})`;
+                ctx.stroke();
+
+                if (speed > 4 || mouse.down) {
+                    ctx.globalCompositeOperation = 'lighter';
+                    ctx.lineWidth = 1.0 + speed * 0.3;
+                    ctx.strokeStyle = `hsla(${this.hue}, 100%, 50%, 0.02)`;
+                    ctx.stroke();
+                    ctx.globalCompositeOperation = 'source-over';
+                }
+            }
+        }
+
+        function animate() {
+            time = Date.now();
+            const pulse = (Math.sin(time * 0.002) + 1) / 2;
+            
+            // Sync UI glow with the fabric pulse - now even brighter
+            titleEl.style.textShadow = `0 0 ${15 + pulse * 20}px rgba(0, 180, 255, ${0.4 + pulse * 0.6})`;
+            brandEl.style.textShadow = `0 0 ${15 + pulse * 20}px rgba(255, 255, 255, ${0.4 + pulse * 0.6})`;
+            brandEl.style.opacity = 0.6 + pulse * 0.4;
+
+            ctx.fillStyle = 'rgba(0, 2, 10, 0.25)';
+            ctx.fillRect(0, 0, width, height);
+
+            strands.forEach(s => {
+                s.update();
+                s.draw(pulse);
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('mousemove', (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
+        window.addEventListener('mousedown', () => mouse.down = true);
+        window.addEventListener('mouseup', () => mouse.down = false);
+        window.addEventListener('resize', init);
+        
+        init(); 
+        animate();
+    </script>
+</body>
+</html>
