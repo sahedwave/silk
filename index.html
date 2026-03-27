@@ -95,6 +95,8 @@
         let width, height, strands = [];
         let mouse = { x: 0, y: 0, down: false };
         let time = 0;
+        let touchHoldTimer = null;
+        let activeTouchPointerId = null;
 
         const strandCount = 180; 
         const nodesPerStrand = 80;
@@ -198,10 +200,48 @@
             mouse.y = clientY;
         }
 
-        window.addEventListener('pointermove', (e) => updatePointer(e.clientX, e.clientY));
-        window.addEventListener('pointerdown', (e) => { updatePointer(e.clientX, e.clientY); mouse.down = true; });
-        window.addEventListener('pointerup', () => mouse.down = false);
-        window.addEventListener('pointercancel', () => mouse.down = false);
+        function clearTouchHold() {
+            if (touchHoldTimer) {
+                clearTimeout(touchHoldTimer);
+                touchHoldTimer = null;
+            }
+        }
+
+        window.addEventListener('pointermove', (e) => {
+            updatePointer(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('pointerdown', (e) => {
+            updatePointer(e.clientX, e.clientY);
+
+            if (e.pointerType === 'touch') {
+                activeTouchPointerId = e.pointerId;
+                mouse.down = false;
+                clearTouchHold();
+                touchHoldTimer = setTimeout(() => {
+                    if (activeTouchPointerId === e.pointerId) mouse.down = true;
+                }, 1000);
+                return;
+            }
+
+            mouse.down = true;
+        });
+
+        window.addEventListener('pointerup', (e) => {
+            if (e.pointerType === 'touch' && activeTouchPointerId === e.pointerId) {
+                activeTouchPointerId = null;
+                clearTouchHold();
+            }
+            mouse.down = false;
+        });
+
+        window.addEventListener('pointercancel', (e) => {
+            if (e.pointerType === 'touch' && activeTouchPointerId === e.pointerId) {
+                activeTouchPointerId = null;
+                clearTouchHold();
+            }
+            mouse.down = false;
+        });
         window.addEventListener('resize', init);
         
         init(); 
