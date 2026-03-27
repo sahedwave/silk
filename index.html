@@ -82,7 +82,7 @@
 <body>
     <div id="title" class="ui-element">SILK</div>
     <div id="brand" class="ui-element">ALLIED</div>
-    <div id="mobileHint" class="ui-element">drag to stir • hold to pull</div>
+    <div id="mobileHint" class="ui-element">drag to stir • hold 1s to pull</div>
     <canvas id="silkCanvas"></canvas>
 
     <script>
@@ -97,6 +97,9 @@
         let time = 0;
         let touchHoldTimer = null;
         let activeTouchPointerId = null;
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchLongPressArmed = false;
 
         const strandCount = 180; 
         const nodesPerStrand = 80;
@@ -207,8 +210,24 @@
             }
         }
 
+        function resetTouchState() {
+            activeTouchPointerId = null;
+            touchLongPressArmed = false;
+            clearTouchHold();
+            mouse.down = false;
+        }
+
         window.addEventListener('pointermove', (e) => {
             updatePointer(e.clientX, e.clientY);
+
+            if (e.pointerType === 'touch' && activeTouchPointerId === e.pointerId && touchLongPressArmed) {
+                const moved = Math.hypot(e.clientX - touchStartX, e.clientY - touchStartY);
+                if (moved > 12) {
+                    touchLongPressArmed = false;
+                    clearTouchHold();
+                    mouse.down = false;
+                }
+            }
         });
 
         window.addEventListener('pointerdown', (e) => {
@@ -216,10 +235,13 @@
 
             if (e.pointerType === 'touch') {
                 activeTouchPointerId = e.pointerId;
+                touchStartX = e.clientX;
+                touchStartY = e.clientY;
+                touchLongPressArmed = true;
                 mouse.down = false;
                 clearTouchHold();
                 touchHoldTimer = setTimeout(() => {
-                    if (activeTouchPointerId === e.pointerId) mouse.down = true;
+                    if (activeTouchPointerId === e.pointerId && touchLongPressArmed) mouse.down = true;
                 }, 1000);
                 return;
             }
@@ -229,16 +251,16 @@
 
         window.addEventListener('pointerup', (e) => {
             if (e.pointerType === 'touch' && activeTouchPointerId === e.pointerId) {
-                activeTouchPointerId = null;
-                clearTouchHold();
+                resetTouchState();
+                return;
             }
             mouse.down = false;
         });
 
         window.addEventListener('pointercancel', (e) => {
             if (e.pointerType === 'touch' && activeTouchPointerId === e.pointerId) {
-                activeTouchPointerId = null;
-                clearTouchHold();
+                resetTouchState();
+                return;
             }
             mouse.down = false;
         });
